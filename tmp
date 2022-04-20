@@ -4,11 +4,12 @@ nodes=[]
 
 class CollectorVisitor(Visitor):
     def visit(self, ancestors, node):
-        print(ancestors, ':', node(depth=0, skip_none=True))
+        print(node.parent)
+        #print(ancestors, ':', node(depth=0, skip_none=True))
         nodes.append(node)
 
 visitor = CollectorVisitor()
-visitor(root[0])
+visitor(r)
 
 
 for node in nodes:
@@ -17,5 +18,5 @@ for node in nodes:
     print("\n\n")
 
 
-for pre, fill, node in RenderTree(n):
-    print("%s%s" % (pre, node.id``))   
+for pre, fill, node in RenderTree(r):
+    print("%s%s" % (pre, node.id))   
