@@ -13,13 +13,13 @@ sql="select * from f a, h b where a.a = 'baz' and a.x=b.l  group by a having cou
 #sql="select * from f a, h where a.bar = 'baz' "
 #" select * from (select * from b)a;"
 v=p.parse(sql)
-
+opt=False
 
 outfile = open('genereated.py', 'w')
 codegen.emit_header(outfile)
 
 for s in v:
-    r=t.buildtree(s)
+    r=t.buildtree(s, opt)
     for pre, fill, node in RenderTree(r):
      print("%s%s %s" % (pre, node.id, node.optype))
     for x in PreOrderIter(r):

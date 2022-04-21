@@ -17,7 +17,7 @@ class NodeType(Enum):
     NONE=10
     
     def __str__(self):
-        return str(self.name)+"= "+str(self.value)
+        return str(self.name)
  
 
 class Op:
@@ -74,6 +74,7 @@ class Operator(Op, NodeMixin):  # Add Node feature
         if 'r2' in cond:
             r2=cond['r2']
             f2=cond['f2']
+            right=True
         else:
            v2=cond['v2']
            if(is_str_const(v2)):
@@ -85,12 +86,13 @@ class Operator(Op, NodeMixin):  # Add Node feature
 
         txt=""    
         if left and right:
-            txt=relname+"['"+f1+"']" +op+relname+"['"+f2+"']  "
+            txt="'"+f1+"' in "+relname +" and " + "'"+f2+"' in "+relname +" and "+ relname+"['"+f1+"']" +op+relname+"['"+f2+"']  "
         elif left:
-            txt=relname+"['"+f1+"']" +op+str(v2)+"  "
+            txt="'"+f1+"' in "+relname +" and "  +relname+"['"+f1+"']" +op+str(v2)+"  "
         elif right:
-            txt=str(v1)+op+relname+"['"+f2+"']  "        
+            txt="'"+f2+"' in "+relname +" and "  +str(v1)+op+relname+"['"+f2+"']  "        
         
+        txt="("+txt+")"
         return txt  
 
         
@@ -119,15 +121,15 @@ class Operator(Op, NodeMixin):  # Add Node feature
           ## add json scan here  
         elif self.optype==NodeType.FILTER:
             scan_func="operator_"+str(self.children[0].id)+"()"
-            relname=self.params["relname"]
-            lines.append("\tfor " + relname  + " in "+ scan_func+":")
+            #relname=self.params["relname"]
+            lines.append("\tfor row" +   " in "+ scan_func+":")
             lines.append ("\t\t"+"condition = True")
             for cond in self.params["conds"]:
                 if cond == None: 
                         continue
-                lines.append("\t\tcondition= condition and " +self.gen_cond(cond,relname))
+                lines.append("\t\tcondition= condition and " +self.gen_cond(cond,"row"))
             lines.append("\t\tif  condition :" )
-            lines.append("\t\t\tyield " + relname)
+            lines.append("\t\t\tyield " + "row")
             lines.append("")
         elif self.optype==NodeType.CROSSPRODUCT:
             #Read one input entiry to a list
@@ -199,6 +201,7 @@ def get_cond(arg):
 
         
     return cond
+
 def process_arg(arg, relname):
     cond=get_cond(arg)
     lcond= 'r1' in cond and 'r2' not in cond and cond['r1']==relname
@@ -215,7 +218,6 @@ def process_arg(arg, relname):
         return cond
 
 def get_rel_cond(relname, context):
-#    print("\n\n\n\n\n "+ relname +" \n\n\n\n")
     conds=[]
     if context != None:
             w=context.whereClause()
@@ -226,14 +228,29 @@ def get_rel_cond(relname, context):
                     for arg in w['args']:
                         conds.append(process_arg(arg,relname))
     return conds
+
+def get_conds( context):
+    conds=[]
+    if context != None:
+            w=context.whereClause()
+            if w != None:
+                if 'args' not in w:
+                    conds.append(get_cond(w))
+                else:
+                    for arg in w['args']:
+                        conds.append(get_cond(arg))
+    return conds
+
+
 def process_arg_2(arg,l,r):
     condition=get_cond(arg)
-    print("#condition"+str(condition))
+    #print("#condition"+str(condition))
     cond1='r1' in condition and 'r2' in condition and condition['r1'] in l and condition['r2'] in r
     cond2='r2' in condition and 'r1' in condition and condition['r2'] in l and condition['r1'] in r
     if cond1 or cond2:
         return condition
     return None    
+
 def get_join_cond(l,r,context):
     conds=[]
     if context != None:
@@ -259,7 +276,7 @@ def get_relname(rel):
             relname=rel.alias.aliasname
     return relname 
              
-def process_scan(rel, context):
+def process_scan(rel, context, optimize=True):
     relname=""
     filter=None
     if type(rel).__name__=='RangeVar':
@@ -270,6 +287,7 @@ def process_scan(rel, context):
         scan=Operator(NodeType.SCAN,params)
         relname=get_relname(rel)
     #find any  where 
+    if optimize == True:
         conds=get_rel_cond(relname,context)
         if conds != None and len(conds) > 0:
             fparams=dict()
@@ -291,14 +309,14 @@ def process_from(fromClause, context):
     r=[]
     length=len(fromClause)
     if length==1:
-        return process_scan(fromClause[0],context)
+        return process_scan(fromClause[0],context,True)
     elif length>=2:
-        prev=process_scan(fromClause[0],context)
+        prev=process_scan(fromClause[0],context,True)
         rel1=get_relname(fromClause[0])
         l.append(rel1)
         
         for i in range(1,length):
-            scan2=process_scan(fromClause[i],context)
+            scan2=process_scan(fromClause[i],context,True)
             rel2=get_relname(fromClause[i])
             r.append(rel2)
             conds=get_join_cond(l,r,context)
@@ -323,10 +341,44 @@ def process_from(fromClause, context):
     return prev       
 
 
-def buildtree(s):
+def process_from_nooptimize(fromClause, context):
+    #to do:
+    # sort relation by the condition
+    prev=None
+    length=len(fromClause)
+    if length==1:
+        prev= process_scan(fromClause[0],context,False)
+    elif length>=2:
+        prev=process_scan(fromClause[0],context,False)
+        for i in range(1,length):
+            scan2=process_scan(fromClause[i],context,False)
+            crossproduct=Operator(NodeType.CROSSPRODUCT,None)
+            prev.parent=crossproduct
+            scan2.parent=crossproduct
+            crossproduct.child.append(prev)
+            crossproduct.child.append(scan2)
+
+            prev=crossproduct
+     
+    conds=get_conds(context)
+    if conds != None and len(conds) > 0:
+        fparams=dict()
+        fparams['conds']=conds
+        #fparams['relname']=relname # this is needed to get the correct table name with alias
+        filter=Operator(NodeType.FILTER,fparams)
+        filter.child.append(prev)
+        prev.parent=filter
+        prev=filter
+    return prev       
+
+
+def buildtree(s, optimize=True):
     #convert from
     fclause=s.fromClause
-    f=process_from(fclause,s)
+    if optimize==True:
+        f=process_from(fclause,s)
+    else:
+        f=process_from_nooptimize(fclause,s)
     result=Operator(NodeType.RESULT,None)
     f.parent=result
     result.child.append(f)
