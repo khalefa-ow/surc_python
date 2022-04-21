@@ -1,14 +1,9 @@
-from functools import cache
-from pglast import ast
+#pip3 install anytree
+#pip3 install pglast
+#pip3 install pprint
 from pglast import parse_sql
 from pprint import pprint
 from anytree import AnyNode, RenderTree
-#pip3 install anytree
-#pip3 install pglast
-
-from yaml import scan
-
-
 
 def parse(sql):
     stms=[]

@@ -1,11 +1,6 @@
-from cmath import exp
 
-from sqlite3 import paramstyle
 from anytree import NodeMixin, RenderTree, PreOrderIter
-
 from enum import Enum
-
-
 
 class NodeType(Enum): 
     SCAN=1
@@ -43,37 +38,94 @@ class Operator(Op, NodeMixin):  # Add Node feature
     def __str__(self):
         return "id "+ str(self.id) + "optype "+ str(self.optype) + " "+str(self.params) +  " "+str(self.child)   
 
-    def emitcode(self, n, context):
+    def emitcode(self, n, context, outfile):
         func="operator_"+ str(self.id)
         indent='\t'*n
-        print(indent +"#" +str(self.optype)+"")
-        print(indent+"def "+func+':'+'')
         lines=[]
-        if self.params != None:
-            for x,v in self.params.items():
-                print(indent+ "# "+ str(x) + " "+ str(v)+ "")
+        #print("#" +str(self.optype)+"")
+        #print("def "+func+'():'+'')
+
+        lines.append("def "+func+'():'+'')
+
+        #if self.params != None:
+            #print("self.params="+ str(self.params))
+            #for x,v in self.params.items():
+                #print( "# "+ str(x) + " "+ str(v)+ "")
         if self.optype==NodeType.SCAN :
             # assume a scan csv file
-            
             self.params["filename"]=context.Relations[self.params["relname"]]
-            lines.append("with open('{filename}', newline='') as csv_file:")
-            lines.append("    csv_reader = csv.DictReader(csv_file, delimiter=',')")
-            lines.append("    for row in csv_reader:")
-            lines.append("        yield row")
+            lines.append("\twith open('{filename}', newline='') as csv_file:")
+            lines.append("\t\tcsv_reader = csv.DictReader(csv_file, delimiter=',')")
+            lines.append("\t\tfor row in csv_reader:")
+            lines.append("\t\t\tyield row")
             lines.append("")
+          ## add json scan here  
         elif self.optype==NodeType.FILTER:
             # assume a function
-            print(indent+"def "+func+':'+'\n')
-            print(indent+"    return "+str(self.params["func"])+"\n")
+            #lines.append(indent+"def "+func+':'+'\n')
+            scan_func="operator_"+str(self.children[0].id)+"()"
+            relname=self.params["relname"]
+            lines.append("\tfor " + relname  + " in "+ scan_func+":")
+            lines.append ("\t\t"+"condition = True")
+            for cond in self.params["conds"]:
+                if cond == None: 
+                        continue
+                if cond['r1']== relname:
+                    lines.append("\t\tcondition= condition and " +  relname + "['" + cond['f1'] + "']" + cond['op'] + str(cond['v2']) + " ")
+            lines.append("\t\tif  condition :" )
+            lines.append("\t\t\tyield " + relname)
+            lines.append("")
+        elif self.optype==NodeType.CROSSPRODUCT:
+            #Read one input entiry to a list
+            #for each input fomr the seoncd input, retiterate throught the list
+            i1="operator_"+str(self.children[0].id)+"()"
+            i2="operator_"+str(self.children[1].id)+"()"
+            lines.append("input1=[]")
+            lines.append("for row in "+i1+":")
+            lines.append("\tinput1.append(row)")
+            lines.append("")
+            lines.append("for row2 in "+i2+":")
+            lines.append("\tfor row1 in input1:")
+            lines.append("\t\tr=row2.copy()")
+            lines.append("\t\tr.update(row1)")
+            lines.append("\t\tyield r")
+            lines.append("")
+        elif self.optype==NodeType.JOIN:
+            lines.append("\t#build a hash table")
+            i1="operator_"+str(self.children[0].id)+"()"
+            i2="operator_"+str(self.children[1].id)+"()"
+            lines.append("\tinput1=dict()")
+            lines.append("\tfor row in "+i1+":")
+            cond=self.params["conds"][0]
+            lines.append("\t\tv1=get_value(row['"+cond["f1"]+"']):")
+            lines.append("\t\tif v1 not in input1:")
+            lines.append("\t\t\tinput1[v1]]=[]")
+            lines.append("\t\tinput1[v1].append(row)")
+            lines.append("")
+            lines.append("\tfor row2 in "+i2+":")
+            lines.append("\t\tv2=get_value(row2['"+cond["f2"]+"']))")
+            lines.append("\t\tif v2 in input1:")
+            lines.append("\t\t\tl1=input1[v2]")
+            lines.append("\t\t\tfor v in l1:")
+            lines.append("\t\t\t\tr=row2.copy()")
+            lines.append("\t\t\t\tr.update(v)")
+            lines.append("\t\t\tyield r")
+            lines.append("")
+        elif self.optype==NodeType.RESULT:
+            lines.append("i1=operator_"+str(self.children[0].id)+"()")
+            lines.append("for row in i1:")
+            lines.append("\tprint(row)")
+            lines.append("")
 
-        for line in lines:
-                print(indent+ line.format(**self.params)+"")    
+        if self.params == None:
+            for line in lines:
+                outfile.write(indent+ line+"")    
+        else:
+            for line in lines:
+               outfile.write(indent+ line.format(**self.params)+"")    
 
 
 def get_cond(arg):
-#    print(type(arg))
-#    print(arg)
-#    print(arg['name'])
     cond=dict()
     if arg['@']=='A_Expr':
         cond['op']=arg['name'][0]['val']
@@ -93,6 +145,20 @@ def get_cond(arg):
 
         
     return cond
+def process_arg(arg, relname):
+    cond=get_cond(arg)
+    lcond= 'r1' in cond and 'r2' not in cond and cond['r1']==relname
+    rcond= 'r2' in cond and 'r1' not in cond and cond['r2']==relname
+    if lcond:
+        return cond
+    elif rcond:
+        cond['r1'],cond['r2'],cond['f1'],cond['f2']=cond['r2'],cond['r1'],cond['f2'],cond['f1']
+        expr=cond['op']
+        if expr=='>':
+            cond['op']='<'
+        elif expr=='<':
+            cond['op']='>'   
+        return cond
 
 def get_rel_cond(relname, context):
 #    print("\n\n\n\n\n "+ relname +" \n\n\n\n")
@@ -100,61 +166,35 @@ def get_rel_cond(relname, context):
     if context != None:
             w=context.whereClause()
             if w != None:
-                args=w['args']
-                conds=[]
-                for arg in args:
-                    #print(arg)
-                    #lexpr=arg['lexpr']
-                    #rexpr=arg['rexpr']
-                    #lrelname=None
-                    #rrelname=None
-                    #if lexpr['@']=='ColumnRef' and lexpr['fields'] !=None and len(lexpr['fields'])>1 : 
-                    #    lrelname=(lexpr['fields'])[0]['val']
-                    #if  rexpr['@']=='ColumnRef' and rexpr['fields'] !=None and len(rexpr['fields'])>1 : 
-                    #    rrelname=(rexpr['fields'])[0]['val']
-                    #lcond= lexpr['@']=='ColumnRef' and 'Const' in rexpr['@'] and lrelname==relname
-                    #rcond=rexpr['@']=='ColumnRef' and 'Const' in lexpr['@'] and rrelname==relname
-                    cond=get_cond(arg)
-                    lcond= 'r1' in cond and 'r2' not in cond and cond['r1']==relname
-                    rcond= 'r2' in cond and 'r1' not in cond and cond['r2']==relname
-                    if lcond:
-                        conds.append(cond)
-                        #print(arg)
-                    elif rcond:
-                        
-                        cond['r1'],cond['r2'],cond['f1'],cond['f2']=cond['r2'],cond['r1'],cond['f2'],cond['f1']
-                        expr=cond['op']
-                        if expr=='>':
-                            cond['op']='<'
-                        elif expr=='<':
-                            cond['op']='>'   
-                        conds.append(cond)
+                if 'args' not in w:
+                    conds.append(process_arg(w,relname))
+                else:
+                    for arg in w['args']:
+                        conds.append(process_arg(arg,relname))
     return conds
-
+def process_arg_2(arg,l,r):
+    condition=get_cond(arg)
+    print("#condition"+str(condition))
+    cond1='r1' in condition and 'r2' in condition and condition['r1'] in l and condition['r2'] in r
+    cond2='r2' in condition and 'r1' in condition and condition['r2'] in l and condition['r1'] in r
+    if cond1 or cond2:
+        return condition
+    return None    
 def get_join_cond(l,r,context):
     conds=[]
     if context != None:
             w=context.whereClause()
             if w != None:
-                args=w['args']
-                conds=[]
-                for arg in args:
-                    #lexpr=arg['lexpr']
-                    #rexpr=arg['rexpr']
-                    #lrelname=None
-                    #rrelname=None
-                    #if lexpr['@']=='ColumnRef' and lexpr['fields'] !=None and  len(lexpr['fields'])>1 : 
-                    #    lrelname=(lexpr['fields'])[0]['val']
-                    #if rexpr['@']=='ColumnRef' and rexpr['fields'] !=None and  len(rexpr['fields'])>1 : 
-                    #    rrelname=(rexpr['fields'])[0]['val']
-                    #cond= lexpr['@']=='ColumnRef' and rexpr['@']=='ColumnRef' and ((lrelname in l and rrelname in r) or ((lrelname in r and rrelname in l))) 
-                    condition=get_cond(arg)
-                    cond1='r1' in condition and 'r2' in condition and condition['r1'] in l and condition['r2'] in r
-                    cond2='r2' in condition and 'r1' in condition and condition['r2'] in l and condition['r1'] in r
-                    if cond1 or cond2:
-                        conds.append(condition)
+                if 'args' not in w:
+                    tmp=process_arg_2(w,l,r)
+                    if tmp != None:
+                        conds.append(tmp)
+                else:
+                    for arg in w['args']:
+                        tmp=process_arg_2(arg,l,r)
+                        if tmp != None:
+                            conds.append(tmp)
                         
-
     return conds
 
 def get_relname(rel):
@@ -178,8 +218,10 @@ def process_scan(rel, context):
     #find any  where 
         conds=get_rel_cond(relname,context)
         if conds != None and len(conds) > 0:
-            params['conds']=conds
-            filter=Operator(NodeType.FILTER,params)
+            fparams=dict()
+            fparams['conds']=conds
+            fparams['relname']=relname # this is needed to get the correct table name with alias
+            filter=Operator(NodeType.FILTER,fparams)
             filter.child.append(scan)
             scan.parent=filter
 
@@ -234,6 +276,8 @@ def buildtree(s):
     result=Operator(NodeType.RESULT,None)
     f.parent=result
     result.child.append(f)
+
+   
     #whereClause
     
     #joincondition

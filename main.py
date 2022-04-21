@@ -1,7 +1,8 @@
-from doctest import Example
+
 import parse as p
 import tree as t
 import example as e
+import codegen
 
 from anytree import NodeMixin, RenderTree
 from pglast.visitors import Visitor
@@ -13,9 +14,14 @@ sql="select * from f a, h where a.bar = 'baz' and a.x=h.y and a.m>3 group by a h
 #" select * from (select * from b)a;"
 v=p.parse(sql)
 
+
+outfile = open('genereated.py', 'w')
+codegen.emit_header(outfile)
+
 for s in v:
     r=t.buildtree(s)
     for pre, fill, node in RenderTree(r):
      print("%s%s %s" % (pre, node.id, node.optype))
     for x in PreOrderIter(r):
-        print (x.emitcode(1,e.example))
+         x.emitcode(0,e.example, outfile)
+    codegen.emit_footer(outfile,r)
