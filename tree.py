@@ -1,5 +1,3 @@
-
-
 from anytree import NodeMixin, RenderTree, PreOrderIter
 from enum import Enum
 
@@ -7,7 +5,7 @@ class NodeType(Enum):
     SCAN=1
     FUNCTION=2
     PROJECT=3
-    FILTER=4
+    SELECTION=4
     JOIN=5
     ORDER=6
     GROUP=7
@@ -112,14 +110,16 @@ class Operator(Op, NodeMixin):  # Add Node feature
                 #print( "# "+ str(x) + " "+ str(v)+ "")
         if self.optype==NodeType.SCAN :
             # assume a scan csv file
-            self.params["filename"]=context.Relations[self.params["relname"]]
+            tmp=context.Relations[self.params["relname"]]
+            scan_type=tmp[0]
+            self.params["filename"]=tmp[1]
             lines.append("\twith open('{filename}', newline='') as csv_file:")
             lines.append("\t\tcsv_reader = csv.DictReader(csv_file, delimiter=',')")
             lines.append("\t\tfor row in csv_reader:")
             lines.append("\t\t\tyield row")
             lines.append("")
           ## add json scan here  
-        elif self.optype==NodeType.FILTER:
+        elif self.optype==NodeType.SELECTION:
             scan_func="operator_"+str(self.children[0].id)+"()"
             #relname=self.params["relname"]
             lines.append("\tfor row" +   " in "+ scan_func+":")
@@ -220,25 +220,28 @@ def process_arg(arg, relname):
 def get_rel_cond(relname, context):
     conds=[]
     if context != None:
-            w=context.whereClause()
+            w=context.whereClause
             if w != None:
-                if 'args' not in w:
-                    conds.append(process_arg(w,relname))
+                if 'args' not in w():
+                    conds.append(process_arg(w(),relname))
                 else:
-                    for arg in w['args']:
+                    for arg in w()['args']:
                         conds.append(process_arg(arg,relname))
     return conds
 
-def get_conds( context):
+def get_conds(context):
     conds=[]
     if context != None:
-            w=context.whereClause()
+        if 'whereClause' in context:
+            w=context.whereClause
+
             if w != None:
-                if 'args' not in w:
-                    conds.append(get_cond(w))
+                if 'args' not in w():
+                    conds.append(get_cond(w()))
                 else:
-                    for arg in w['args']:
+                    for arg in w()['args']:
                         conds.append(get_cond(arg))
+    
     return conds
 
 
@@ -254,14 +257,14 @@ def process_arg_2(arg,l,r):
 def get_join_cond(l,r,context):
     conds=[]
     if context != None:
-            w=context.whereClause()
+            w=context.whereClause
             if w != None:
                 if 'args' not in w:
-                    tmp=process_arg_2(w,l,r)
+                    tmp=process_arg_2(w(),l,r)
                     if tmp != None:
                         conds.append(tmp)
                 else:
-                    for arg in w['args']:
+                    for arg in w()['args']:
                         tmp=process_arg_2(arg,l,r)
                         if tmp != None:
                             conds.append(tmp)
@@ -293,7 +296,7 @@ def process_scan(rel, context, optimize=True):
             fparams=dict()
             fparams['conds']=conds
             fparams['relname']=relname # this is needed to get the correct table name with alias
-            filter=Operator(NodeType.FILTER,fparams)
+            filter=Operator(NodeType.SELECTION,fparams)
             filter.child.append(scan)
             scan.parent=filter
 
@@ -365,7 +368,7 @@ def process_from_nooptimize(fromClause, context):
         fparams=dict()
         fparams['conds']=conds
         #fparams['relname']=relname # this is needed to get the correct table name with alias
-        filter=Operator(NodeType.FILTER,fparams)
+        filter=Operator(NodeType.SELECTION,fparams)
         filter.child.append(prev)
         prev.parent=filter
         prev=filter

@@ -7,7 +7,7 @@ class Example(object):
 
 example= Example()
 example.Relations=dict()
-example.Relations['f']="a.csv"
-example.Relations['h']="b.csv"
+example.Relations['f']=("file","f.csv")
+example.Relations['h']=("file","h.csv")
 
 
