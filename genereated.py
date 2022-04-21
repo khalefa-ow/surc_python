@@ -33,15 +33,15 @@ def operator_3():
 			yield row
 
 def operator_2():
-input1=[]
-for row in operator_0():
-	input1.append(row)
+	input1=[]
+	for row in operator_0():
+		input1.append(row)
 
-for row2 in operator_1():
-	for row1 in input1:
-		r=row2.copy()
-		r.update(row1)
-		yield r
+	for row2 in operator_1():
+		for row1 in input1:
+			r=row2.copy()
+			r.update(row1)
+			yield r
 
 def operator_0():
 	with open('a.csv', newline='') as csv_file:

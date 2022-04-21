@@ -136,15 +136,15 @@ class Operator(Op, NodeMixin):  # Add Node feature
             #for each input fomr the seoncd input, retiterate throught the list
             i1="operator_"+str(self.children[0].id)+"()"
             i2="operator_"+str(self.children[1].id)+"()"
-            lines.append("input1=[]")
-            lines.append("for row in "+i1+":")
-            lines.append("\tinput1.append(row)")
+            lines.append("\tinput1=[]")
+            lines.append("\tfor row in "+i1+":")
+            lines.append("\t\tinput1.append(row)")
             lines.append("")
-            lines.append("for row2 in "+i2+":")
-            lines.append("\tfor row1 in input1:")
-            lines.append("\t\tr=row2.copy()")
-            lines.append("\t\tr.update(row1)")
-            lines.append("\t\tyield r")
+            lines.append("\tfor row2 in "+i2+":")
+            lines.append("\t\tfor row1 in input1:")
+            lines.append("\t\t\tr=row2.copy()")
+            lines.append("\t\t\tr.update(row1)")
+            lines.append("\t\t\tyield r")
             lines.append("")
         elif self.optype==NodeType.JOIN:
             lines.append("\t#build a hash table")
