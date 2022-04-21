@@ -9,7 +9,7 @@ from pglast.visitors import Visitor
 from anytree import NodeMixin, RenderTree, PreOrderIter
 
 
-sql="select * from f a, h where a.bar = 'baz' and a.x=h.y and a.m>3 group by a having count(*)>100 order by x;"
+sql="select * from f a, h b where a.a = 'baz' and a.x=b.l  group by a having count(*)>100 order by x;"
 #sql="select * from f a, h where a.bar = 'baz' "
 #" select * from (select * from b)a;"
 v=p.parse(sql)

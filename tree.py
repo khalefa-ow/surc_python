@@ -1,4 +1,5 @@
 
+
 from anytree import NodeMixin, RenderTree, PreOrderIter
 from enum import Enum
 
@@ -22,7 +23,25 @@ class NodeType(Enum):
 class Op:
     def __init__(self):
         self.optype= NodeType.NONE  
-   
+
+def isfloat(element):
+    try:
+        float(element)
+        return True
+    except ValueError:
+        return False
+def isint(element):
+    try:
+        int(element)
+        return True
+    except ValueError:
+        return False        
+
+def is_str_const(s):
+    if (isint(s) or isfloat(s)) : 
+        return False
+    return True    
+
 
 class Operator(Op, NodeMixin):  # Add Node feature
     nodeid =0
@@ -37,6 +56,44 @@ class Operator(Op, NodeMixin):  # Add Node feature
 
     def __str__(self):
         return "id "+ str(self.id) + "optype "+ str(self.optype) + " "+str(self.params) +  " "+str(self.child)   
+  
+    def gen_cond(self, cond,relname):
+        
+        left=False
+        right=False
+
+        if 'r1' in cond:
+            r1=cond['r1']
+            f1=cond['f1']
+            left=True
+        else:
+            v1=cond['v1']   
+            if(is_str_const(v1)):
+                v1="'"+v1+"'"
+        
+        if 'r2' in cond:
+            r2=cond['r2']
+            f2=cond['f2']
+        else:
+           v2=cond['v2']
+           if(is_str_const(v2)):
+            v2="'"+v2+"'"
+        
+        op=cond['op']
+        if(op=='='):
+            op='=='
+
+        txt=""    
+        if left and right:
+            txt=relname+"['"+f1+"']" +op+relname+"['"+f2+"']  "
+        elif left:
+            txt=relname+"['"+f1+"']" +op+str(v2)+"  "
+        elif right:
+            txt=str(v1)+op+relname+"['"+f2+"']  "        
+        
+        return txt  
+
+        
 
     def emitcode(self, n, context, outfile):
         func="operator_"+ str(self.id)
@@ -61,8 +118,6 @@ class Operator(Op, NodeMixin):  # Add Node feature
             lines.append("")
           ## add json scan here  
         elif self.optype==NodeType.FILTER:
-            # assume a function
-            #lines.append(indent+"def "+func+':'+'\n')
             scan_func="operator_"+str(self.children[0].id)+"()"
             relname=self.params["relname"]
             lines.append("\tfor " + relname  + " in "+ scan_func+":")
@@ -70,8 +125,7 @@ class Operator(Op, NodeMixin):  # Add Node feature
             for cond in self.params["conds"]:
                 if cond == None: 
                         continue
-                if cond['r1']== relname:
-                    lines.append("\t\tcondition= condition and " +  relname + "['" + cond['f1'] + "']" + cond['op'] + str(cond['v2']) + " ")
+                lines.append("\t\tcondition= condition and " +self.gen_cond(cond,relname))
             lines.append("\t\tif  condition :" )
             lines.append("\t\t\tyield " + relname)
             lines.append("")
@@ -97,13 +151,13 @@ class Operator(Op, NodeMixin):  # Add Node feature
             lines.append("\tinput1=dict()")
             lines.append("\tfor row in "+i1+":")
             cond=self.params["conds"][0]
-            lines.append("\t\tv1=get_value(row['"+cond["f1"]+"']):")
+            lines.append("\t\tv1=get_value(row['"+cond["f1"]+"'])")
             lines.append("\t\tif v1 not in input1:")
-            lines.append("\t\t\tinput1[v1]]=[]")
+            lines.append("\t\t\tinput1[v1]=[]")
             lines.append("\t\tinput1[v1].append(row)")
             lines.append("")
             lines.append("\tfor row2 in "+i2+":")
-            lines.append("\t\tv2=get_value(row2['"+cond["f2"]+"']))")
+            lines.append("\t\tv2=get_value(row2['"+cond["f2"]+"'])")
             lines.append("\t\tif v2 in input1:")
             lines.append("\t\t\tl1=input1[v2]")
             lines.append("\t\t\tfor v in l1:")
@@ -112,17 +166,17 @@ class Operator(Op, NodeMixin):  # Add Node feature
             lines.append("\t\t\tyield r")
             lines.append("")
         elif self.optype==NodeType.RESULT:
-            lines.append("i1=operator_"+str(self.children[0].id)+"()")
-            lines.append("for row in i1:")
-            lines.append("\tprint(row)")
+            lines.append("\ti1=operator_"+str(self.children[0].id)+"()")
+            lines.append("\tfor row in i1:")
+            lines.append("\t\tyield(row)")
             lines.append("")
 
         if self.params == None:
             for line in lines:
-                outfile.write(indent+ line+"")    
+                outfile.write(indent+ line+"\n")    
         else:
             for line in lines:
-               outfile.write(indent+ line.format(**self.params)+"")    
+               outfile.write(indent+ line.format(**self.params)+"\n")    
 
 
 def get_cond(arg):
