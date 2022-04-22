@@ -1,6 +1,8 @@
 
 def emit_header(outfile):
     outfile.write("import csv\n")
+    outfile.write("import json\n")
+    outfile.write("from flatten_json import flatten\n")
     outfile.write("\n")
     outfile.write("def isfloat(element):\n")
     outfile.write("\ttry:\n")

@@ -1,18 +1,22 @@
+
+import re
 from anytree import NodeMixin, RenderTree, PreOrderIter
 from enum import Enum
 
 class NodeType(Enum): 
     SCAN=1
-    FUNCTION=2
-    PROJECT=3
-    SELECTION=4
-    JOIN=5
-    ORDER=6
-    GROUP=7
-    LIMIT=8
-    CROSSPRODUCT=9
+    API_endpoint=2
+    CACHE=3
+    RETRY=4
+    PROJECT=5
+    SELECTION=6
+    JOIN=7
+    ORDER=8
+    GROUP=9
+    LIMIT=10
+    CROSSPRODUCT=11
     RESULT=0
-    NONE=10
+    NONE=12
     
     def __str__(self):
         return str(self.name)
@@ -55,8 +59,7 @@ class Operator(Op, NodeMixin):  # Add Node feature
     def __str__(self):
         return "id "+ str(self.id) + "optype "+ str(self.optype) + " "+str(self.params) +  " "+str(self.child)   
   
-    def gen_cond(self, cond,relname):
-        
+    def gen_cond(self, cond,relname):    
         left=False
         right=False
 
@@ -92,9 +95,7 @@ class Operator(Op, NodeMixin):  # Add Node feature
         
         txt="("+txt+")"
         return txt  
-
-        
-
+     
     def emitcode(self, n, context, outfile):
         func="operator_"+ str(self.id)
         indent='\t'*n
@@ -110,14 +111,38 @@ class Operator(Op, NodeMixin):  # Add Node feature
                 #print( "# "+ str(x) + " "+ str(v)+ "")
         if self.optype==NodeType.SCAN :
             # assume a scan csv file
-            tmp=context.Relations[self.params["relname"]]
+            tmp=context.schema[self.params["relname"]]
             scan_type=tmp[0]
-            self.params["filename"]=tmp[1]
-            lines.append("\twith open('{filename}', newline='') as csv_file:")
-            lines.append("\t\tcsv_reader = csv.DictReader(csv_file, delimiter=',')")
-            lines.append("\t\tfor row in csv_reader:")
-            lines.append("\t\t\tyield row")
-            lines.append("")
+            if(scan_type=="csvfile"):
+                self.params["filename"]=tmp[1]
+                lines.append("\twith open('{filename}', newline='') as csv_file:")
+                lines.append("\t\tcsv_reader = csv.DictReader(csv_file, delimiter=',')")
+                lines.append("\t\tfor row in csv_reader:")
+                lines.append("\t\t\tyield row")
+                lines.append("")
+            elif (scan_type=="jsonfile"):
+                self.params["filename"]=tmp[1]
+                if len(tmp)>=2:
+                    self.params["objects"]=tmp[2]
+                else:
+                    self.params["objects"]=None
+                if len(tmp)>=3:
+                    self.params["flatten"]=tmp[3]
+                else:
+                     self.params["flatten"]=False
+
+                lines.append("\twith open('{filename}', newline='') as json_file:")
+                lines.append("\t\tjson_data = json.load(json_file)")
+                if self.params["objects"]!=None:
+                    lines.append("\t\t\tfor x in row['{objects}']:")   
+                else:
+                    lines.append("\t\tfor row in json_data:")
+                if self.params["flatten"]:
+                    lines.append("\t\t\tyield flatten(x)")
+                else:
+                    lines.append("\t\t\t\tyield row")
+         
+                lines.append("")
           ## add json scan here  
         elif self.optype==NodeType.SELECTION:
             scan_func="operator_"+str(self.children[0].id)+"()"
@@ -279,19 +304,39 @@ def get_relname(rel):
             relname=rel.alias.aliasname
     return relname 
              
-def process_scan(rel, context, optimize=True):
+def process_scan(rel, qcontext,dcontext, optimize=True):
     relname=""
     filter=None
     if type(rel).__name__=='RangeVar':
         relname=rel.relname
-        #=rel.relpersistence
-        params=dict()
-        params['relname']=relname
-        scan=Operator(NodeType.SCAN,params)
-        relname=get_relname(rel)
+        tmp=dcontext.schema[relname]
+        if tmp[0]=='csvfile' or tmp[0]=='jsonfile':
+            params=dict()
+            params['relname']=relname
+            scan=Operator(NodeType.SCAN,params)
+            relname=get_relname(rel) #for alias
+        if tmp[0]=="api":
+            params=dict()
+            params['api']=relname
+            api=Operator(NodeType.API_endpoint ,params)
+            scan=api
+            relname=get_relname(rel)    #for alias 
+            if tmp[2]=='retry':
+                retry=Operator(NodeType.RETRY,params)
+                scan.parent=retry
+                retry.child.append(scan)
+                scan=retry
+            if tmp[1]=='cache':
+                cache=Operator(NodeType.CACHE,params)
+                scan.parent=cache
+                cache.child.append(scan)
+                scan=cache
+
+                
+
     #find any  where 
     if optimize == True:
-        conds=get_rel_cond(relname,context)
+        conds=get_rel_cond(relname,qcontext)
         if conds != None and len(conds) > 0:
             fparams=dict()
             fparams['conds']=conds
@@ -305,24 +350,24 @@ def process_scan(rel, context, optimize=True):
     else: 
         return filter
 
-def process_from(fromClause, context):
+def process_from(fromClause, qcontext,dcontext):
     #to do:
     # sort relation by the condition
     l=[]
     r=[]
     length=len(fromClause)
     if length==1:
-        return process_scan(fromClause[0],context,True)
+        return process_scan(fromClause[0],qcontext,dcontext,True)
     elif length>=2:
-        prev=process_scan(fromClause[0],context,True)
+        prev=process_scan(fromClause[0],qcontext,dcontext,True)
         rel1=get_relname(fromClause[0])
         l.append(rel1)
         
         for i in range(1,length):
-            scan2=process_scan(fromClause[i],context,True)
+            scan2=process_scan(fromClause[i],qcontext,dcontext,True)
             rel2=get_relname(fromClause[i])
             r.append(rel2)
-            conds=get_join_cond(l,r,context)
+            conds=get_join_cond(l,r,qcontext)
             if len(conds)>0:
                 params=dict()
                 params['conds']=conds
@@ -344,17 +389,17 @@ def process_from(fromClause, context):
     return prev       
 
 
-def process_from_nooptimize(fromClause, context):
+def process_from_nooptimize(fromClause, qcontext,dcontext):
     #to do:
     # sort relation by the condition
     prev=None
     length=len(fromClause)
     if length==1:
-        prev= process_scan(fromClause[0],context,False)
+        prev= process_scan(fromClause[0],qcontext,dcontext,False)
     elif length>=2:
-        prev=process_scan(fromClause[0],context,False)
+        prev=process_scan(fromClause[0],qcontext,dcontext,False)
         for i in range(1,length):
-            scan2=process_scan(fromClause[i],context,False)
+            scan2=process_scan(fromClause[i],qcontext,dcontext,False)
             crossproduct=Operator(NodeType.CROSSPRODUCT,None)
             prev.parent=crossproduct
             scan2.parent=crossproduct
@@ -363,7 +408,7 @@ def process_from_nooptimize(fromClause, context):
 
             prev=crossproduct
      
-    conds=get_conds(context)
+    conds=get_conds(qcontext)
     if conds != None and len(conds) > 0:
         fparams=dict()
         fparams['conds']=conds
@@ -375,13 +420,13 @@ def process_from_nooptimize(fromClause, context):
     return prev       
 
 
-def buildtree(s, optimize=True):
+def buildtree(qcontext, dcontext, optimize=True):
     #convert from
-    fclause=s.fromClause
+    fclause=qcontext.fromClause
     if optimize==True:
-        f=process_from(fclause,s)
+        f=process_from(fclause,qcontext, dcontext)
     else:
-        f=process_from_nooptimize(fclause,s)
+        f=process_from_nooptimize(fclause,qcontext, dcontext)
     result=Operator(NodeType.RESULT,None)
     f.parent=result
     result.child.append(f)

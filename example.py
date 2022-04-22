@@ -6,8 +6,11 @@ class Example(object):
 
 
 example= Example()
-example.Relations=dict()
-example.Relations['f']=("file","f.csv")
-example.Relations['h']=("file","h.csv")
+example.schema=dict()
+example.schema['f']=("csvfile","f.csv")
+example.schema['h']=("csvfile","h.csv")
+
+example.schema['items']=("jsonfile","h.json","Items", True) #last parameter is for flatten json
+example.schema['tweets']=("api","cache", "noretry","tweets.json","items")
 
 

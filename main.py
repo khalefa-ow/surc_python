@@ -6,7 +6,7 @@ import argparse
 from anytree import NodeMixin, RenderTree,PreOrderIter
 from pglast.visitors import Visitor
 
-sqlq="select * from f a, h b where a.a = 'baz' and a.x=b.l  group by a having count(*)>100 order by x;"
+sqlq="select * from f a, tweets b where a.a = 'baz' and a.x=b.l  group by a having count(*)>100 order by x;"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--opt",action="store_true",help="optimize", default="True")
@@ -16,13 +16,13 @@ args = parser.parse_args()
 #" select * from (select * from b)a;"
 
 v=p.parse(args.sql)
-opt=args.opt
+opt=True#args.opt
 
 outfile = open('genereated.py', 'w')
 codegen.emit_header(outfile)
 
 for s in v:
-    r=t.buildtree(s, opt)
+    r=t.buildtree(s,e.example, opt)
     for pre, fill, node in RenderTree(r):
      print("%s%s %s" % (pre, node.id, node.optype))
     for x in PreOrderIter(r):
