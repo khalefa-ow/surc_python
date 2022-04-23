@@ -9,10 +9,10 @@ from pglast.visitors import Visitor
 #sqlq="select * from a ,  b where a.a = 'baz' and a.x=b.l  group by a having count(*)>100 order by x;"
 sql1="select * from course c, student s, enrolled e where c.cid = e.ecid and s.id = e.eid ;"
 sql2="select * from course c, enrolled e,  student s where c.cid = e.ecid and s.id = e.eid ;"
-
+sql3="select * from items i"
 parser = argparse.ArgumentParser()
 parser.add_argument("--opt",action="store_true",help="optimize", default="True")
-parser.add_argument("--sql",action="store",help="sql query", default=sql2)
+parser.add_argument("--sql",action="store",help="sql query", default=sql3)
 args = parser.parse_args()
 
 v=p.parse(args.sql)

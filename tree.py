@@ -100,15 +100,9 @@ class Operator(Op, NodeMixin):  # Add Node feature
         func="operator_"+ str(self.id)
         indent='\t'*n
         lines=[]
-        #print("#" +str(self.optype)+"")
-        #print("def "+func+'():'+'')
 
         lines.append("def "+func+'():'+'')
 
-        #if self.params != None:
-            #print("self.params="+ str(self.params))
-            #for x,v in self.params.items():
-                #print( "# "+ str(x) + " "+ str(v)+ "")
         if self.optype==NodeType.SCAN :
             # assume a scan csv file
             tmp=context.schema[self.params["relname"]]
@@ -120,7 +114,9 @@ class Operator(Op, NodeMixin):  # Add Node feature
                 lines.append("\t\tfor row in csv_reader:")
                 lines.append("\t\t\tyield row")
                 lines.append("")
+
             elif (scan_type=="jsonfile"):
+
                 self.params["filename"]=tmp[1]
                 if len(tmp)>=2:
                     self.params["objects"]=tmp[2]
@@ -134,13 +130,13 @@ class Operator(Op, NodeMixin):  # Add Node feature
                 lines.append("\twith open('{filename}', newline='') as json_file:")
                 lines.append("\t\tjson_data = json.load(json_file)")
                 if self.params["objects"]!=None:
-                    lines.append("\t\t\tfor x in row['{objects}']:")   
+                    lines.append("\t\tfor row in json_data['{objects}']:")   
                 else:
                     lines.append("\t\tfor row in json_data:")
                 if self.params["flatten"]:
-                    lines.append("\t\t\tyield flatten(x)")
+                    lines.append("\t\t\tyield flatten(row)")
                 else:
-                    lines.append("\t\t\t\tyield row")
+                    lines.append("\t\t\tyield row")
          
                 lines.append("")
           ## add json scan here  
