@@ -190,7 +190,7 @@ class Operator(Op, NodeMixin):  # Add Node feature
             lines.append("\t\t\tfor v in l1:")
             lines.append("\t\t\t\tr=row2.copy()")
             lines.append("\t\t\t\tr.update(v)")
-            lines.append("\t\t\tyield r")
+            lines.append("\t\t\t\tyield r")
             lines.append("")
         elif self.optype==NodeType.RESULT:
             lines.append("\ti1=operator_"+str(self.children[0].id)+"()")
@@ -274,8 +274,11 @@ def process_arg_2(arg,l,r):
     condition=get_cond(arg)
     #print("#condition"+str(condition))
     cond1='r1' in condition and 'r2' in condition and condition['r1'] in l and condition['r2'] in r
+    if cond1:
+        return condition
     cond2='r2' in condition and 'r1' in condition and condition['r2'] in l and condition['r1'] in r
-    if cond1 or cond2:
+    if  cond2:
+        condition['r1'],condition['r2'],condition['f1'],condition['f2']=condition['r2'],condition['r1'],condition['f2'],condition['f1']
         return condition
     return None    
 
@@ -331,8 +334,7 @@ def process_scan(rel, qcontext,dcontext, optimize=True):
                 scan.parent=cache
                 cache.child.append(scan)
                 scan=cache
-
-                
+               
 
     #find any  where 
     if optimize == True:
@@ -366,7 +368,8 @@ def process_from(fromClause, qcontext,dcontext):
         for i in range(1,length):
             scan2=process_scan(fromClause[i],qcontext,dcontext,True)
             rel2=get_relname(fromClause[i])
-            r.append(rel2)
+            r=[rel2]
+            #r.append(rel2)
             conds=get_join_cond(l,r,qcontext)
             if len(conds)>0:
                 params=dict()
@@ -386,6 +389,17 @@ def process_from(fromClause, qcontext,dcontext):
                 crossproduct.child.append( scan2)
 
                 prev=crossproduct
+
+    conds=get_conds(qcontext)
+    if conds != None and len(conds) > 0:
+        fparams=dict()
+        fparams['conds']=conds
+        #fparams['relname']=relname # this is needed to get the correct table name with alias
+        filter=Operator(NodeType.SELECTION,fparams)
+        filter.child.append(prev)
+        prev.parent=filter
+        prev=filter
+
     return prev       
 
 

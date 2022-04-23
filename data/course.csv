@@ -1,0 +1,4 @@
+cid,code,cname
+1,'cs101', 'C++'
+2, 'cs103', 'Java'
+3, 'cs203', 'Data structures'

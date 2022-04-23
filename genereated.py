@@ -27,44 +27,53 @@ def operator_6():
 		yield(row)
 
 def operator_5():
-	#build a hash table
-	input1=dict()
-	for row in operator_1():
-		v1=get_value(row['x'])
-		if v1 not in input1:
-			input1[v1]=[]
-		input1[v1].append(row)
-
-	for row2 in operator_4():
-		v2=get_value(row2['l'])
-		if v2 in input1:
-			l1=input1[v2]
-			for v in l1:
-				r=row2.copy()
-				r.update(v)
-			yield r
-
-def operator_1():
-	for row in operator_0():
+	for row in operator_4():
 		condition = True
-		condition= condition and ('a' in row and row['a']=='baz'  )
+		condition= condition and ('cid' in row and 'ecid' in row and row['cid']==row['ecid']  )
+		condition= condition and ('id' in row and 'eid' in row and row['id']==row['eid']  )
 		if  condition :
 			yield row
 
+def operator_4():
+	input1=[]
+	for row in operator_2():
+		input1.append(row)
+
+	for row2 in operator_3():
+		for row1 in input1:
+			r=row2.copy()
+			r.update(row1)
+			yield r
+
+def operator_2():
+	input1=[]
+	for row in operator_0():
+		input1.append(row)
+
+	for row2 in operator_1():
+		for row1 in input1:
+			r=row2.copy()
+			r.update(row1)
+			yield r
+
 def operator_0():
-	with open('f.csv', newline='') as csv_file:
+	with open('data/course.csv', newline='') as csv_file:
 		csv_reader = csv.DictReader(csv_file, delimiter=',')
 		for row in csv_reader:
 			yield row
 
-def operator_4():
-	for row in operator_3():
-		condition = True
-		if  condition :
+def operator_1():
+	with open('data/enrolled.csv', newline='') as csv_file:
+		csv_reader = csv.DictReader(csv_file, delimiter=',')
+		for row in csv_reader:
 			yield row
 
 def operator_3():
-def operator_2():
+	with open('data/student.csv', newline='') as csv_file:
+		csv_reader = csv.DictReader(csv_file, delimiter=',')
+		for row in csv_reader:
+			yield row
+
 if __name__ == "__main__":
 	for r in operator_6():
 		print (r)

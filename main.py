@@ -6,17 +6,17 @@ import argparse
 from anytree import NodeMixin, RenderTree,PreOrderIter
 from pglast.visitors import Visitor
 
-sqlq="select * from f a, tweets b where a.a = 'baz' and a.x=b.l  group by a having count(*)>100 order by x;"
+#sqlq="select * from a ,  b where a.a = 'baz' and a.x=b.l  group by a having count(*)>100 order by x;"
+sql1="select * from course c, student s, enrolled e where c.cid = e.ecid and s.id = e.eid ;"
+sql2="select * from course c, enrolled e,  student s where c.cid = e.ecid and s.id = e.eid ;"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--opt",action="store_true",help="optimize", default="True")
-parser.add_argument("--sql",action="store",help="sql query", default=sqlq)
+parser.add_argument("--sql",action="store",help="sql query", default=sql2)
 args = parser.parse_args()
-#sql="select * from f a, h where a.bar = 'baz' "
-#" select * from (select * from b)a;"
 
 v=p.parse(args.sql)
-opt=True#args.opt
+opt=False#False#args.opt
 
 outfile = open('genereated.py', 'w')
 codegen.emit_header(outfile)
